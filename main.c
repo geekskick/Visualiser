@@ -286,6 +286,7 @@ int main(int argc, const char * argv[]) {
 									};
 	
 	strncpy(settings.file_name, argv[OUTPUT_LOC], FILEPATH_BUFF_LEN);
+	strncat(settings.file_name, ".ppm", FILEPATH_BUFF_LEN);
 	
 	// Initialisation Routines
 	if(ppm_init(&settings) != ERR_NONE){
