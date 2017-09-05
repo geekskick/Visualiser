@@ -13,6 +13,7 @@
 #define ERR_NONE						0
 #define ERR_FILE_OPENING				1
 #define ERR_FILE_FP						2
+#define FILEPATH_BUFF_LEN				1024
 
 /**
  Set the red part of the pixel
@@ -101,7 +102,7 @@ union pixel_t{
  Options for the PPM file output
  */
 struct ppm_opts_t{
-	char	file_name[1024];
+	char	file_name[FILEPATH_BUFF_LEN];
 	FILE	*fp;				/// The File pointer
 	int		width;
 	int		height;
@@ -256,10 +257,18 @@ void	merge(uint32_t arr[], int l, int m, int r, bool (*test)(uint32_t, uint32_t)
  @param arr_len The length of the array to sort
  */
 void	merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings, void (*array_write)(const uint32_t[], const int, const struct ppm_opts_t * const), const int arr_len);
+
+
+enum { APP_NAME = 0, OUTPUT_LOC, ARG_COUNT };
 // ------------------ END PLAGURISM  ------------------
 
 int main(int argc, const char * argv[]) {
 
+	if(argc != ARG_COUNT) {
+		printf("Usage: ./%s outputfilename\n", argv[APP_NAME]);
+		return 0;
+	}
+	
 	srand((unsigned int)time(NULL));
 	static const int numbers	= 250;							// Length of the array to sort
 	static const int border		= 6;							// The height of the strip in pixels
@@ -275,6 +284,8 @@ int main(int argc, const char * argv[]) {
 									ppm_len,					// The height of the image
 									UINT8_MAX					// The maximum value for a pixel r or g or b value will be
 									};
+	
+	strncpy(settings.file_name, argv[OUTPUT_LOC], FILEPATH_BUFF_LEN);
 	
 	// Initialisation Routines
 	if(ppm_init(&settings) != ERR_NONE){
