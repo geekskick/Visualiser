@@ -16,10 +16,10 @@ void ppm_strip_write(const uint32_t arr[], const int n, const struct ppm_opts_t 
 int ppm_pix_write(const union pixel_t * const pixel, FILE * const out){
 	if(!out){
 		fprintf(stderr, "[%d] Nothing in the &(FILE*)\n", __LINE__);
-		return ERR_FILE_FP;
+		return PPM_ERR_FILE_FP;
 	}
 	fprintf(out, "%d %d %d %c", pixel->r, pixel->g, pixel->b, pixel->eol);
-	return ERR_NONE;
+	return PPM_ERR_NONE;
 }
 
 //-----------------------------------------------------
@@ -28,13 +28,13 @@ int ppm_init(struct ppm_opts_t * const opts){
 	opts->fp = fopen(opts->file_name, "w");
 	if(!opts->fp){
 		perror("Error opening file\n");
-		return ERR_FILE_OPENING;
+		return PPM_ERR_FILE_OPENING;
 	}
 	
 	// Header
 	fprintf(opts->fp, "P3\n%d %d\n255\n", opts->width, opts->height);
 	
-	return ERR_NONE;
+	return PPM_ERR_NONE;
 }
 
 //-----------------------------------------------------
@@ -46,7 +46,7 @@ void ppm_pix_printf(const union pixel_t * const pixel){
 int ppm_deinit(struct ppm_opts_t * const opts){
 	fclose(opts->fp);
 	opts->fp = NULL;
-	return ERR_NONE;
+	return PPM_ERR_NONE;
 }
 
 //-----------------------------------------------------

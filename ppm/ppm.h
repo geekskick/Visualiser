@@ -7,10 +7,10 @@
 #ifndef ppm_h
 #define ppm_h
 
-#define ERR_NONE						0
-#define ERR_FILE_OPENING				1
-#define ERR_FILE_FP						2
-#define FILEPATH_BUFF_LEN				1024
+#define PPM_ERR_NONE						0
+#define PPM_ERR_FILE_OPENING				1
+#define PPM_ERR_FILE_FP						2
+#define PPM_FILEPATH_BUFF_LEN				1024
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -102,7 +102,7 @@ union pixel_t{
  Options for the PPM file output
  */
 struct ppm_opts_t{
-	char	file_name[FILEPATH_BUFF_LEN];
+	char	file_name[PPM_FILEPATH_BUFF_LEN];
 	FILE	*fp;				/// The File pointer
 	int		width;
 	int		height;

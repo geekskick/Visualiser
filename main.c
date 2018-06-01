@@ -148,16 +148,16 @@ int main(int argc, const char * argv[]) {
 									UINT8_MAX					// The maximum value for a pixel r or g or b value will be
 									};
 	
-	strncpy(settings.file_name, argv[OUTPUT_LOC], FILEPATH_BUFF_LEN);
-	strncat(settings.file_name, ".ppm", FILEPATH_BUFF_LEN);
+	strncpy(settings.file_name, argv[OUTPUT_LOC], PPM_FILEPATH_BUFF_LEN);
+	strncat(settings.file_name, ".ppm", PPM_FILEPATH_BUFF_LEN);
 	
 	// Initialisation Routines
-	if(ppm_init(&settings) != ERR_NONE){
+	if(ppm_init(&settings) != PPM_ERR_NONE){
 		return 1;
 	}
 	if(!settings.fp){
 		fprintf(stderr, "[%d] Nothing in fp\n", __LINE__);
-		return ERR_FILE_FP;
+		return PPM_ERR_FILE_FP;
 	}
 	
 	// Initialise arrays to a bunch of random values
@@ -199,7 +199,7 @@ int main(int argc, const char * argv[]) {
 	ppm_deinit(&settings);
 	printf("Complete and written to %s\n", settings.file_name);
 	
-	return ERR_NONE;
+	return PPM_ERR_NONE;
 }
 
 //-----------------------------------------------------
