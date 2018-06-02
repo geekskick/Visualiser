@@ -21,6 +21,7 @@ Usage:
 ![radix](radix.gif)
 
 And endlessly looping:
+
 ![radixloop](radix_repeat.gif)
 
 ### Heap
