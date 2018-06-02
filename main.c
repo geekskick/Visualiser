@@ -9,6 +9,7 @@
 #include <time.h>
 #include <stdbool.h>
 #include <string.h>
+#include <getopt.h>
 
 #include "ppm.h"
 #include "gif-h/gif.h"
@@ -107,6 +108,15 @@ void	heap_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb c
 void	merge(uint32_t arr[], int l, int m, int r, bool (*test)(uint32_t, uint32_t));
 
 /**
+ Merge sort wrapper which allows it to have the same function signature as the rest.
+ 
+ @param arr The array to sort
+ @param n The length of it
+ @param cb The callback to the function which actually writes it to the gif
+ */
+void merge_sort_wrapper(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb);
+
+/**
  Perform the mergesort http://www.geeksforgeeks.org/merge-sort/
 
  @param arr The array to sort
@@ -125,7 +135,7 @@ void	merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), 
  @param n It's length
  @param cb The callback to the function which actually writes it to the gif
  */
-void	radix_sort(uint32_t arr[], const int n, gif_cb cb);
+void	radix_sort(uint32_t arr[], const int n, bool (*test)(uint32_t, uint32_t), gif_cb cb);
 
 /**
  Count sorts on the digits in the values of the array
@@ -137,6 +147,7 @@ void	radix_sort(uint32_t arr[], const int n, gif_cb cb);
  */
 void	count_sort(uint32_t arr[], const int n, const int exp, gif_cb cb);
 
+void    all_sort(uint32_t arr[], const int n, bool (*test)(uint32_t, uint32_t), gif_cb cb);
 
 /// Write the new array to a gif frame
 /// @param arr The array to put in
@@ -156,47 +167,115 @@ void gif_pix_array_write(const uint32_t arr[], const int n){
     gif_write_frame(&writer, (uint8_t*)gif, 8, false);
 }
 
-int main(int argc, const char * argv[]) {
+/// A sorting algo
+struct sorter{
+    char name[PPM_FILEPATH_BUFF_LEN]; ///< The description used at the command line
+    void (*perform)(uint32_t arr[], const int n, bool (*test)(uint32_t, uint32_t), gif_cb cb); ///< The actual sort function
+};
+
+/// The available sorting functions
+struct sorter sorters[] = {
+    { "merge", merge_sort_wrapper },
+    { "bubble", bubble_sort },
+    { "selection", selctn_sort },
+    { "heap", heap_sort },
+    { "radix", radix_sort },
+    { "all", all_sort },
+};
+
+int main(int argc, char * const argv[]) {
+    
+    static const unsigned int default_delay = 10;
+    static const unsigned int default_radix_sort_delay = 70;
+    
+    char            filename[PPM_FILEPATH_BUFF_LEN];
+    char            *oval = NULL;
+    int             chosen_sort = -1;
+    int             c = 0;
+    unsigned int    delay = 0;
+    
+    srand((unsigned int)time(NULL));
+    opterr = 0;
+    
+    // ------- Parse input -------
+    while ((c = getopt (argc, argv, "o:s:hr")) != -1)
+    switch (c)
+    {
+        case 'h':
+            printf("Usage:\n\t-o\toutput filename without .gif\n"
+                   "\t-s\tsort type: ");
+            for(int i = 0; i < sizeof(sorters)/sizeof(*sorters); i++){
+                printf("%s ", sorters[i].name);
+            }
+            printf("\n"
+                   "\t-r\tRepeat the Gif\n"
+                   "\t-h\tHelp menu\n");
+            return 1;
+            break;
+        case 'o':
+            oval = optarg;
+            break;
+        case 'r':
+            delay = default_delay;
+            break;
+        case 's':
+            for(int i = 0; i < sizeof(sorters)/sizeof(*sorters); i++){
+                if(0 == strcmp(optarg, sorters[i].name)){
+                    chosen_sort = i;
+                    break;
+                }
+            }
+            if(-1 == chosen_sort){
+                printf("%s isn't a valid sort\n", optarg);
+                return 1;
+            }
+            break;
+        case '?':
+            if (optopt == 'o' || optopt == 's'){
+                fprintf (stderr, "Option -%c requires an argument to say which kind of sort.\n", optopt);
+            }
+            else{
+                fprintf(stderr, "Unknown option character `\\x%x'.\n", optopt);
+            }
+            return 1;
+        default:
+            abort();
+    }
 	
-//    if(argc != ARG_COUNT) {
-//        printf("Usage: ./%s outputfilename\n", argv[APP_NAME]);
-//        return 0;
-//    }
-	
-	srand((unsigned int)time(NULL));
-	
-    char filename[PPM_FILEPATH_BUFF_LEN];
-    if(argc == ARG_COUNT){
-        strncpy(filename, argv[OUTPUT_LOC], strlen(argv[OUTPUT_LOC]));
+    // Extract filename passed in, or use default
+    if(NULL != oval){
+        strncpy(filename, oval, strlen(oval));
         strncat(filename, ".gif", strlen(".gif"));
     }
     else{
-        strncpy(filename, "TestGif.gif", strlen("TestGif.gif"));
+        strncpy(filename, "default.gif", strlen("default.gif"));
     }
     
-	// Initialise arrays to a bunch of random values
-	uint32_t arr[numbers]= { 0, };
-	uint32_t second[numbers] = { 0 ,};
-	uint32_t third[numbers] = { 0, };
-	uint32_t fourth[numbers] = { 0, };
-	uint32_t fifth[numbers] = { 0, };
+    // If no sort specified at command line then do all of them
+    if(-1 == chosen_sort){ chosen_sort = sizeof(sorters)/sizeof(*sorters)-1; }
     
+	// Initialise array to a bunch of random values
+	uint32_t arr[numbers]= { 0, };
     memset(gif, UINT32_MAX, numbers * height);
 	
 	for(int i = 0; i < numbers; i++){
-		fifth[i] = fourth[i] = third[i] = second[i] = arr[i] = random()%UINT32_MAX;
+		arr[i] = random()%UINT32_MAX;
         for(int r = 0; r < height; r++){
-            gif[(r*numbers) + i].rgbeol = fifth[i];
+            gif[(r*numbers) + i].rgbeol = arr[i];
         }
 	}
     
-	//-------------------------
-    const unsigned int w = numbers;
-    const unsigned int h = height; // O(n2)
+    // The radix sort needs a longer delay because it's got so few steps
+    if(sorters[chosen_sort].perform == &radix_sort && delay != 0){
+        delay = default_radix_sort_delay;
+        printf("Setting radix sort delay to %dms\n", delay * 10);
+    }
     
-    writer.delay = 1;
-    writer.size.width = w;
-    writer.size.height = h;
+    printf("Delay is %dms\n", delay * 10);
+
+    writer.delay = delay;
+    writer.size.width = numbers;
+    writer.size.height = height;
     
     bool rc = gif_begin(&writer, filename);
     if(!rc){
@@ -205,20 +284,34 @@ int main(int argc, const char * argv[]) {
     }
     //-------------------------
 
-	printf("Now sorting\n");
-	bool (*order)(uint32_t, uint32_t) = &gt_than;
-	
-	bubble_sort(arr,	numbers, order, gif_pix_array_write);
-	selctn_sort(second, numbers, order, gif_pix_array_write);
-	heap_sort  (third,  numbers, order, gif_pix_array_write);
-	merge_sort (fourth, 0, numbers-1, order, gif_pix_array_write, numbers);
-	radix_sort  (fifth, numbers, gif_pix_array_write);
+	printf("Now sorting as %s\n", sorters[chosen_sort].name);
+    
+    bool (*order)(uint32_t, uint32_t) = gt_than;
+    gif_pix_array_write(arr, numbers);
+    sorters[chosen_sort].perform(arr, numbers, order, gif_pix_array_write);
     
 	// Cleanup
     gif_end(&writer);
 	printf("Complete and written to %s\n", filename);
 	
 	return PPM_ERR_NONE;
+}
+
+//-----------------------------------------------------
+
+void merge_sort_wrapper(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb){
+    merge_sort (arr, 0, n-1, test, gif_pix_array_write, n);
+}
+
+//-----------------------------------------------------
+void all_sort(uint32_t arr[], const int n, bool (*test)(uint32_t, uint32_t), gif_cb cb){
+    uint32_t other_arr[n];
+    memcpy(other_arr, arr, n);
+    
+    for(int i = 0; i < (sizeof(sorters)/sizeof(*sorters))-2; i++){
+        sorters[i].perform(arr, n, test, cb);
+        memcpy(arr, other_arr, n);
+    }
 }
 
 //-----------------------------------------------------
@@ -235,9 +328,9 @@ uint32_t get_max_average(uint32_t arr[], int n)
 
 //-----------------------------------------------------
 void count_sort(uint32_t arr[], const int n, const int exp, gif_cb cb){
-	uint32_t output[n]; // output array
+    uint32_t output[n]; // output array
 	int64_t i, count[10] = {0};
- 
+    
 	// Store count of occurrences in count[]
 	for (i = 0; i < n; i++){
 		count[ (ppm_pix_get_average((union pixel_t)arr[i])/exp)%10 ]++;
@@ -253,7 +346,7 @@ void count_sort(uint32_t arr[], const int n, const int exp, gif_cb cb){
 	{
 		output[count[ (ppm_pix_get_average((union pixel_t)arr[i])/exp)%10 ] - 1] = arr[i];
 		count[ (ppm_pix_get_average((union pixel_t)arr[i])/exp)%10 ]--;
-		if(cb != NULL) { cb(output, n); }
+		//if(cb != NULL) { cb(output, n); }
 	}
  
 	// Copy the output array to arr[], so that arr[] now
@@ -263,8 +356,11 @@ void count_sort(uint32_t arr[], const int n, const int exp, gif_cb cb){
 }
 
 //-----------------------------------------------------
-void radix_sort(uint32_t arr[], const int n,gif_cb cb)
+void radix_sort(uint32_t arr[], const int n, bool (*test)(uint32_t, uint32_t), gif_cb cb)
 {
+    (void)test;
+    if(cb != NULL) { cb(arr, n); }
+
 	// Find the maximum number to know number of digits
 	uint32_t m = get_max_average(arr, n);
  
@@ -445,7 +541,7 @@ void merge(uint32_t arr[], int l, int m, int r, bool (*test)(uint32_t, uint32_t)
 void merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), gif_cb cb, const int arr_len){
 	
 	assert(test);
-	
+    
 	if (l < r)
 	{
 		// Same as (l+r)/2, but avoids overflow for
