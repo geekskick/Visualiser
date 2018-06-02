@@ -11,11 +11,26 @@
 #include <string.h>
 
 #include "ppm.h"
+#include "gif-h/gif.h"
+
+// -----------------------------------------------------
+// These values are used in the gif_write_frame callback so they are defined globally
+static const int        numbers    = 250;           ///< Length of the array to sort
+static const int        height     = 50;            ///< Output image strip height
+static union pixel_t    gif[numbers * height];      ///< The Image buffer
+struct gif_writer       writer;                     ///< The writer
+
+/// The arguments as enum
+enum {  APP_NAME = 0,   ///< The first is always the application name
+        OUTPUT_LOC,     ///< The second should always be the output filename
+        ARG_COUNT       ///< There are only two args, but use this as a count value as comparison against argc.
+};
+
+typedef void (*gif_cb)(const uint32_t arr[], const int n);
 
 // ----------- SORTING LIFTED FROM INTERNET -----------
 /**
  A is greater than B
- 
  @param a A value
  @param b B Value
  @return True/False
@@ -45,9 +60,9 @@ void	swap(uint32_t * const xp, uint32_t * const yp);
  @param arr The Array
  @param n Array Length
  @param test The compare function
- @param settings The PPM file settings
+ @param cb The callback to the function which actually writes it to the gif
  */
-void	bubble_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings);
+void	bubble_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb);
 
 /**
  Selection Sort from http://www.algolist.net/Algorithms/Sorting/Selection_sort
@@ -55,9 +70,9 @@ void	bubble_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const 
  @param arr The Array
  @param n Array Length
  @param test The compare function
- @param settings The PPM file settings
+ @param cb The callback to the function which actually writes it to the gif
  */
-void	selctn_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings);
+void	selctn_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb);
 
 /**
  Puts the element at n in the correct place in the heap
@@ -65,7 +80,7 @@ void	selctn_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const 
  @param arr The array
  @param n The length of it
  @param i The thing to place
- @param test The evavulation function
+ @param test The evaluation function
  */
 void	heapify(uint32_t arr[], int n, const int i, bool (*test)(uint32_t, uint32_t));
 
@@ -75,9 +90,9 @@ void	heapify(uint32_t arr[], int n, const int i, bool (*test)(uint32_t, uint32_t
  @param arr The array to sort
  @param n The length of it
  @param test The evaluation function
- @param settings The PPM file settings
+ @param cb The callback to the function which actually writes it to the gif
  */
-void	heap_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings);
+void	heap_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb);
 
 
 /**
@@ -98,18 +113,19 @@ void	merge(uint32_t arr[], int l, int m, int r, bool (*test)(uint32_t, uint32_t)
  @param l The left edge of the array
  @param r The right edge of the array
  @param test The evaluation function
+ @param cb The callback to the function which actually writes it to the gif
  @param arr_len The length of the array
  */
-void	merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings, const int arr_len);
+void	merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), gif_cb cb, const int arr_len);
 
 /**
  Do a radix sort http://www.geeksforgeeks.org/radix-sort/
 
  @param arr The array to sort
  @param n It's length
- @param settings The PPM settings
+ @param cb The callback to the function which actually writes it to the gif
  */
-void	radix_sort(uint32_t arr[], const int n, const struct ppm_opts_t * const settings);
+void	radix_sort(uint32_t arr[], const int n, gif_cb cb);
 
 /**
  Count sorts on the digits in the values of the array
@@ -117,87 +133,90 @@ void	radix_sort(uint32_t arr[], const int n, const struct ppm_opts_t * const set
  @param arr The Array to sort
  @param n The length of it
  @param exp The multiplier, eg the units, the tens, the hundreds
- @param settings the PPM file settings
+ @param cb The callback to the function which actually writes it to the gif
  */
-void	count_sort(uint32_t arr[], const int n, const int exp, const struct ppm_opts_t * const settings);
+void	count_sort(uint32_t arr[], const int n, const int exp, gif_cb cb);
 
-enum { APP_NAME = 0, OUTPUT_LOC, ARG_COUNT };
-// ------------------ END PLAGURISM  ------------------
+
+/// Write the new array to a gif frame
+/// @param arr The array to put in
+/// @param n The length of the array
+void gif_pix_array_write(const uint32_t arr[], const int n){
+
+    assert(n == numbers);
+    
+    for(int item = 0; item < n; item++ ){
+        union pixel_t p;
+        p.rgbeol = arr[item];
+        p.eol = 0;
+        for(int r = 0; r < height; r++){
+            gif[(r*numbers) + item] = p;
+        }
+    }
+    gif_write_frame(&writer, (uint8_t*)gif, 8, false);
+}
 
 int main(int argc, const char * argv[]) {
-
-	if(argc != ARG_COUNT) {
-		printf("Usage: ./%s outputfilename\n", argv[APP_NAME]);
-		return 0;
-	}
+	
+//    if(argc != ARG_COUNT) {
+//        printf("Usage: ./%s outputfilename\n", argv[APP_NAME]);
+//        return 0;
+//    }
 	
 	srand((unsigned int)time(NULL));
-	static const int numbers	= 250;							// Length of the array to sort
-	static const int border		= 6;							// The height of the strip in pixels
-	static const int num_sorts	= 5;							// The number of sortin algorithms
-
-	static const int ppm_len	= (num_sorts*numbers) +			// There will be an image for each sort
-								  ((num_sorts*2) * border) +	// There will be a border above and below each sort
-								  numbers/2 +					// The heap sort needs extra time as it needs to put the array into a heap first
-								  numbers*2;					// The radix sort has loads of extra detail
 	
-	struct ppm_opts_t settings	= { "test.ppm",					// The filename output
-									NULL,						// File pointer init to null
-									numbers,					// The width of the output image
-									ppm_len,					// The height of the image
-									UINT8_MAX					// The maximum value for a pixel r or g or b value will be
-									};
-	
-	strncpy(settings.file_name, argv[OUTPUT_LOC], PPM_FILEPATH_BUFF_LEN);
-	strncat(settings.file_name, ".ppm", PPM_FILEPATH_BUFF_LEN);
-	
-	// Initialisation Routines
-	if(ppm_init(&settings) != PPM_ERR_NONE){
-		return 1;
-	}
-	if(!settings.fp){
-		fprintf(stderr, "[%d] Nothing in fp\n", __LINE__);
-		return PPM_ERR_FILE_FP;
-	}
-	
+    char filename[PPM_FILEPATH_BUFF_LEN];
+    if(argc == ARG_COUNT){
+        strncpy(filename, argv[OUTPUT_LOC], strlen(argv[OUTPUT_LOC]));
+        strncat(filename, ".gif", strlen(".gif"));
+    }
+    else{
+        strncpy(filename, "TestGif.gif", strlen("TestGif.gif"));
+    }
+    
 	// Initialise arrays to a bunch of random values
-	uint32_t arr[numbers] = { 0, };
+	uint32_t arr[numbers]= { 0, };
 	uint32_t second[numbers] = { 0 ,};
 	uint32_t third[numbers] = { 0, };
 	uint32_t fourth[numbers] = { 0, };
 	uint32_t fifth[numbers] = { 0, };
+    
+    memset(gif, UINT32_MAX, numbers * height);
 	
 	for(int i = 0; i < numbers; i++){
 		fifth[i] = fourth[i] = third[i] = second[i] = arr[i] = random()%UINT32_MAX;
+        for(int r = 0; r < height; r++){
+            gif[(r*numbers) + i].rgbeol = fifth[i];
+        }
 	}
-	
+    
+	//-------------------------
+    const unsigned int w = numbers;
+    const unsigned int h = height; // O(n2)
+    
+    writer.delay = 1;
+    writer.size.width = w;
+    writer.size.height = h;
+    
+    bool rc = gif_begin(&writer, filename);
+    if(!rc){
+        fprintf(stderr, "Unsuccessful gif_begin\n");
+        return 0;
+    }
+    //-------------------------
+
 	printf("Now sorting\n");
 	bool (*order)(uint32_t, uint32_t) = &gt_than;
-	settings.write = & ppm_pix_array_write;
 	
-	ppm_strip_write(arr, numbers, &settings, border);
-	bubble_sort(arr,	numbers, order, &settings);
-	ppm_strip_write(fifth, numbers, &settings, border);
-	
-	ppm_strip_write(second, numbers, &settings, border);
-	selctn_sort(second, numbers, order, &settings);
-	ppm_strip_write(second, numbers, &settings, border);
-	
-	ppm_strip_write(third, numbers, &settings, border);
-	heap_sort  (third,  numbers, order, &settings);
-	ppm_strip_write(third, numbers, &settings, border);
-	
-	ppm_strip_write(fourth, numbers, &settings, border);
-	merge_sort (fourth, 0, numbers-1, order, &settings, numbers);
-	ppm_strip_write(fourth, numbers, &settings, border);
-	
-	ppm_strip_write(fifth, numbers, &settings, border);
-	radix_sort(fifth, numbers, &settings);
-	ppm_strip_write(fifth, numbers, &settings, border);
-
+	bubble_sort(arr,	numbers, order, gif_pix_array_write);
+	selctn_sort(second, numbers, order, gif_pix_array_write);
+	heap_sort  (third,  numbers, order, gif_pix_array_write);
+	merge_sort (fourth, 0, numbers-1, order, gif_pix_array_write, numbers);
+	radix_sort  (fifth, numbers, gif_pix_array_write);
+    
 	// Cleanup
-	ppm_deinit(&settings);
-	printf("Complete and written to %s\n", settings.file_name);
+    gif_end(&writer);
+	printf("Complete and written to %s\n", filename);
 	
 	return PPM_ERR_NONE;
 }
@@ -215,7 +234,7 @@ uint32_t get_max_average(uint32_t arr[], int n)
 }
 
 //-----------------------------------------------------
-void count_sort(uint32_t arr[], const int n, const int exp, const struct ppm_opts_t * const settings){
+void count_sort(uint32_t arr[], const int n, const int exp, gif_cb cb){
 	uint32_t output[n]; // output array
 	int64_t i, count[10] = {0};
  
@@ -234,7 +253,7 @@ void count_sort(uint32_t arr[], const int n, const int exp, const struct ppm_opt
 	{
 		output[count[ (ppm_pix_get_average((union pixel_t)arr[i])/exp)%10 ] - 1] = arr[i];
 		count[ (ppm_pix_get_average((union pixel_t)arr[i])/exp)%10 ]--;
-		if(settings->write != NULL) { settings->write(output, n, settings); }
+		if(cb != NULL) { cb(output, n); }
 	}
  
 	// Copy the output array to arr[], so that arr[] now
@@ -244,7 +263,7 @@ void count_sort(uint32_t arr[], const int n, const int exp, const struct ppm_opt
 }
 
 //-----------------------------------------------------
-void radix_sort(uint32_t arr[], const int n, const struct ppm_opts_t * const settings)
+void radix_sort(uint32_t arr[], const int n,gif_cb cb)
 {
 	// Find the maximum number to know number of digits
 	uint32_t m = get_max_average(arr, n);
@@ -253,8 +272,8 @@ void radix_sort(uint32_t arr[], const int n, const struct ppm_opts_t * const set
 	// of passing digit number, exp is passed. exp is 10^i
 	// where i is current digit number
 	for (uint32_t exp = 1; m/exp > 0; exp *= 10){
-		count_sort(arr, n, exp, settings);
-		if(settings->write != NULL) { settings->write(arr, n, settings); }
+		count_sort(arr, n, exp, cb);
+		if(cb != NULL) { cb(arr, n); }
 	}
 
 }
@@ -279,7 +298,7 @@ bool less_than(const uint32_t a, const uint32_t b){
 }
 
 //-----------------------------------------------------
-void bubble_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings){
+void bubble_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb){
 	int i, j;
 	for (i = 0; i < n-1; i++){
 		
@@ -290,7 +309,7 @@ void bubble_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const 
 				swap(&arr[j], &arr[j+1]);
 			}
 		}
-		if(settings->write != NULL) { settings->write(arr, n, settings); }
+        if(cb != NULL) { cb(arr, n); }
 	}
 }
 
@@ -300,7 +319,7 @@ uint32_t ppm_pix_get_average(const union pixel_t p){
 }
 
 //-----------------------------------------------------
-void selctn_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings) {
+void selctn_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb) {
 	int i, j, minIndex, tmp;
 	for (i = 0; i < n - 1; i++) {
 		minIndex = i;
@@ -312,9 +331,9 @@ void selctn_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const 
 			arr[i] = arr[minIndex];
 			arr[minIndex] = tmp;
 		}
-		if(settings->write != NULL) { settings->write(arr, n, settings); }
+        if(cb != NULL) { cb(arr, n); }
 	}
-	if(settings->write != NULL) { settings->write(arr, n, settings); }
+    if(cb != NULL) { cb(arr, n); }
 }
 
 //-----------------------------------------------------
@@ -344,14 +363,14 @@ void heapify(uint32_t arr[], int n, const int i, bool (*test)(uint32_t, uint32_t
 }
 
 //-----------------------------------------------------
-void heap_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings)
+void heap_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), gif_cb cb)
 {
 	
 	assert(test);
 	// Build heap (rearrange array)
 	for (int i = n / 2 - 1; i >= 0; i--){
 		heapify(arr, n, i, test);
-		if(settings->write != NULL) { settings->write(arr, n, settings); }
+        if(cb != NULL) { cb(arr, n); }
 	}
  
 	// One by one extract an element from heap
@@ -363,7 +382,7 @@ void heap_sort(uint32_t arr[], int n, bool (*test)(uint32_t, uint32_t), const st
 		// call max heapify on the reduced heap
 		heapify(arr, i, 0, test);
 		
-		if(settings->write != NULL) { settings->write(arr, n, settings); }
+        if(cb != NULL) { cb(arr, n); }
 	}
 }
 
@@ -423,7 +442,7 @@ void merge(uint32_t arr[], int l, int m, int r, bool (*test)(uint32_t, uint32_t)
 }
 
 //-----------------------------------------------------
-void merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), const struct ppm_opts_t * const settings, const int arr_len){
+void merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), gif_cb cb, const int arr_len){
 	
 	assert(test);
 	
@@ -434,11 +453,11 @@ void merge_sort(uint32_t arr[], int l, int r, bool (*test)(uint32_t, uint32_t), 
 		int m = l+(r-l)/2;
 		
 		// Sort first and second halves
-		merge_sort(arr, l, m, test, settings, arr_len);
-		merge_sort(arr, m+1, r,test,settings, arr_len);
+		merge_sort(arr, l, m, test, cb, arr_len);
+		merge_sort(arr, m+1, r,test,cb, arr_len);
 		merge(arr, l, m, r, test);
-		if(settings->write != NULL) { settings->write(arr, arr_len, settings); }
-		
+        if(cb != NULL) { cb(arr, arr_len); }
+
 	}
 	
 }
