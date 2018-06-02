@@ -1,5 +1,30 @@
 # Visualiser
 
-Output a visualisation of various sorting algorithms as a `.ppm` file. At the moment it's all in one big strip but I'd like to make it a bit more pretty in time. Maybe as a grid or something but thats for later.
+Output a visualisation of various sorting algorithms as a gif. Uses [my fork of a C++ gif library](https://github.com/geekskick/gif-h) to produce the output files.
 
-![radix_inc.jpg](radix_inc.jpg)
+## USAGE
+
+```
+Usage:
+    -o  output filename without .gif
+    -s  sort type: merge bubble selection heap radix all 
+    -r  Repeat the Gif
+    -h  Help menu
+```
+
+## Outputs
+
+### Merge
+![merge](merge.gif)
+
+### Radix
+![radix](radix.gif)
+
+### Heap
+![merge](heap.gif)
+
+### Bubble
+![merge](bubble.gif)
+
+### Selection
+![sel](sel.gif)
